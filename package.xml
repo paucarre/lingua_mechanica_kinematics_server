@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>lingua_mechanica_kinematics_server</name>
-  <version>0.9.1</version>
+  <version>0.0.1</version>
   <description>
     lingua mechanica kinematics server
   </description>
