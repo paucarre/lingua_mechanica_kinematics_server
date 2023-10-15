@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import roslib
 import rospy
-from linguamechanica.inference import setup_inference
+from linguamechanica.inference import setup_inference, initialize_inference_environment
 
 from lingua_mechanica_kinematics_msgs.srv import GetPositionIK
 from moveit_msgs.msg import RobotState, MoveItErrorCodes
@@ -10,7 +10,11 @@ from pytransform3d.transformations import transform_from_pq, exponential_coordin
 import torch
 import numpy as np
 
+environment, agent = None, None
+
 def solve_ik(positon_ik: GetPositionIK):
+    global environment, agent
+    #print(positon_ik)
     pose = positon_ik.ik_request.pose_stamped.pose
     pq = np.array([pose.position.x, pose.position.y, pose.position.z, 
          pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z])
@@ -19,11 +23,14 @@ def solve_ik(positon_ik: GetPositionIK):
     pose = torch.from_numpy(pose)
     # NOTE: in lingua mechanica, poses are inverted compared to pytransform3d
     pose = torch.cat([pose[3:], pose[:3]])
-    environment, agent, state, initial_reward = setup_inference("/home/ros/linguamechanica/urdf/cr5.urdf", 806000, 3200, None, target_pose=pose)
+    #environment, agent, state, initial_reward = setup_inference(urdf="/home/ros/linguamechanica/urdf/cr5.urdf", 
+    #    checkpoint=912000, samples=1, target_thetas=None, target_pose=pose)
+    state, initial_reward = initialize_inference_environment(environment, target_thetas=None, target_pose=pose)
     thetas_sorted, reward_sorted = agent.inference(
-        100, state, environment, 1
+        iterations=40, state=state, environment=environment, top_n=1
     )
-    print(thetas_sorted, reward_sorted)
+    print(pose.detach().tolist())
+    print(thetas_sorted.detach().tolist(), reward_sorted.detach().tolist())
     robot_states = []
     for idx in range(thetas_sorted.shape[0]):
         joint_state = JointState()
@@ -40,7 +47,10 @@ def solve_ik(positon_ik: GetPositionIK):
     return robot_states, success
 
 def get_position_ik_server():
-    rospy.init_node('solve_ik')
+    global environment, agent
+    rospy.init_node('solve_ik')    
+    environment, agent = setup_inference(urdf="/home/ros/linguamechanica/urdf/cr5.urdf", 
+        checkpoint=912000, samples=1600)
     service = rospy.Service('solve_ik', GetPositionIK, solve_ik)
     rospy.spin()
 
