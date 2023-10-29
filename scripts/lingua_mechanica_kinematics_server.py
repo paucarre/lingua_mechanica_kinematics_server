@@ -14,7 +14,7 @@ environment, agent = None, None
 
 def solve_ik(positon_ik: GetPositionIK):
     global environment, agent
-    #print(positon_ik)
+    joint_state = torch.tensor(list(positon_ik.ik_request.robot_state.joint_state.position))
     pose = positon_ik.ik_request.pose_stamped.pose
     pq = np.array([pose.position.x, pose.position.y, pose.position.z, 
          pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z])
@@ -23,14 +23,12 @@ def solve_ik(positon_ik: GetPositionIK):
     pose = torch.from_numpy(pose)
     # NOTE: in lingua mechanica, poses are inverted compared to pytransform3d
     pose = torch.cat([pose[3:], pose[:3]])
-    #environment, agent, state, initial_reward = setup_inference(urdf="/home/ros/linguamechanica/urdf/cr5.urdf", 
-    #    checkpoint=912000, samples=1, target_thetas=None, target_pose=pose)
-    state, initial_reward = initialize_inference_environment(environment, target_thetas=None, target_pose=pose)
+    state, initial_reward = initialize_inference_environment(environment, target_thetas=None, 
+        target_pose=pose, initial_thetas=joint_state, std_dev=0.2)
     thetas_sorted, reward_sorted = agent.inference(
         iterations=40, state=state, environment=environment, top_n=1
     )
-    print(pose.detach().tolist())
-    print(thetas_sorted.detach().tolist(), reward_sorted.detach().tolist())
+    thetas_sorted = thetas_sorted[0:1, :]
     robot_states = []
     for idx in range(thetas_sorted.shape[0]):
         joint_state = JointState()
@@ -48,9 +46,9 @@ def solve_ik(positon_ik: GetPositionIK):
 
 def get_position_ik_server():
     global environment, agent
-    rospy.init_node('solve_ik')    
+    rospy.init_node('solve_ik')  
     environment, agent = setup_inference(urdf="/home/ros/linguamechanica/urdf/cr5.urdf", 
-        checkpoint=912000, samples=1600)
+        checkpoint=1064000, samples=6400)
     service = rospy.Service('solve_ik', GetPositionIK, solve_ik)
     rospy.spin()
 
